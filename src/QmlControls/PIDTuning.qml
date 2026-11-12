@@ -1,35 +1,27 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
+import QtQuick
+import QtQuick.Controls
+import QtGraphs
+import QtQuick.Layouts
 
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtCharts         2.2
-import QtQuick.Layouts  1.2
-
-import QGroundControl               1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.FactSystem    1.0
-import QGroundControl.FactControls  1.0
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Vehicle       1.0
+import QGroundControl
+import QGroundControl.Controls
+import QGroundControl.FactControls
 
 RowLayout {
-    layoutDirection: Qt.RightToLeft
+    spacing: _margins
 
+    QGCPalette { id: qgcPal }
+
+    property real   availableHeight
+    property real   availableWidth
     property var    axis
     property string unit
     property string title
     property var    tuningMode
-    property double chartDisplaySec:     8 // number of seconds to display
-    property bool   showAutoModeChange:  false
-    property bool   showAutoTuning:      false
-    property alias  autotuningEnabled:   autotuningEnabled.checked
+    property double chartDisplaySec:    8 // number of seconds to display
+    property bool   showAutoModeChange: false
+    property bool   showAutoTuning:     false
+    property bool   useAutoTuning:      false
 
     property real   _margins:           ScreenTools.defaultFontPixelHeight / 2
     property int    _currentAxis:       0
@@ -38,10 +30,18 @@ RowLayout {
     property int    _msecs:             0
     property double _last_t:            0
     property var    _savedTuningParamValues:    [ ]
-    property bool   _showCharts: !ScreenTools.isMobile // TODO: test and enable on mobile
 
     readonly property int _tickSeparation:      5
     readonly property int _maxTickSections:     10
+
+    property string _chartTitle:        ""
+    readonly property var _seriesColors: ["#21be2b", "#c62828", "#1565c0", "#f9a825", "#6a1b9a", "#00838f"]
+    property var _legendModel:          []
+
+    Component {
+        id: lineSeriesComponent
+        LineSeries { }
+    }
 
     function adjustYAxisMin(yAxis, newValue) {
         var newMin = Math.min(yAxis.min, newValue)
@@ -62,8 +62,8 @@ RowLayout {
     }
 
     function resetGraphs() {
-        for (var i = 0; i < chart.count; ++i) {
-            chart.series(i).removePoints(0, chart.series(i).count)
+        for (var i = 0; i < chart.seriesList.length; ++i) {
+            chart.seriesList[i].clear()
         }
         _xAxis.min = 0
         _xAxis.max = 0
@@ -77,8 +77,7 @@ RowLayout {
     function saveTuningParamValues() {
         _savedTuningParamValues = [ ]
         for (var i=0; i<axis[_currentAxis].params.count; i++) {
-            var currentTuneParam = controller.getParameterFact(-1,
-                axis[_currentAxis].params.get(i).param)
+            var currentTuneParam = controller.getParameterFact(-1, axis[_currentAxis].params.get(i).param)
             _savedTuningParamValues.push(currentTuneParam.valueString)
         }
         savedRepeater.model = _savedTuningParamValues
@@ -93,14 +92,27 @@ RowLayout {
     }
 
     function axisIndexChanged() {
-        chart.removeAllSeries()
-        axis[_currentAxis].plot.forEach(function(e) {
-            chart.createSeries(ChartView.SeriesTypeLine, e.name, xAxis, yAxis);
+        while (chart.seriesList.length > 0) {
+            // Do not call s.destroy() here. QGraphsView holds an internal
+            // pointer to the series that is only cleared during the next
+            // updatePolish() pass. Destroying the series before that pass
+            // causes a SIGSEGV in QGraphsView::updatePolish(). The series is
+            // parented to chart so it is freed when the chart is destroyed.
+            // GPU/graph resources are released by removeSeries().
+            chart.removeSeries(chart.seriesList[0])
+        }
+        var legendItems = []
+        axis[_currentAxis].plot.forEach(function(e, idx) {
+            var color = _seriesColors[idx % _seriesColors.length]
+            var series = lineSeriesComponent.createObject(chart, {name: e.name, color: color})
+            chart.addSeries(series)
+            legendItems.push({name: e.name, color: color})
         })
+        _legendModel = legendItems
         var chartTitle = axis[_currentAxis].plotTitle
         if (chartTitle == null)
             chartTitle = axis[_currentAxis].name
-        chart.title = chartTitle + " " + title
+        _chartTitle = chartTitle + " " + title
         saveTuningParamValues()
         resetGraphs()
     }
@@ -113,23 +125,6 @@ RowLayout {
 
     Component.onDestruction: globals.activeVehicle.setPIDTuningTelemetryMode(Vehicle.ModeDisabled)
     on_CurrentAxisChanged: axisIndexChanged()
-
-    ValueAxis {
-        id:             xAxis
-        min:            0
-        max:            0
-        labelFormat:    "%.2f"
-        titleText:      qsTr("sec")
-        tickCount:      11
-    }
-
-    ValueAxis {
-        id:         yAxis
-        min:        0
-        max:        10
-        titleText:  unit
-        tickCount:  Math.min(((max - min) / _tickSeparation), _maxTickSections) + 1
-    }
 
     Timer {
         id:         dataTimer
@@ -147,7 +142,7 @@ RowLayout {
             for (var i = 0; i < len; ++i) {
                 var value = axis[_currentAxis].plot[i].value
                 if (!isNaN(value)) {
-                    chart.series(i).append(_msecs/1000, value)
+                    chart.seriesList[i].append(_msecs/1000, value)
                     if (firstPoint) {
                         _yAxis.min = value
                         _yAxis.max = value
@@ -157,8 +152,8 @@ RowLayout {
                     }
                     // limit history
                     var minSec = _msecs/1000 - 3*60
-                    while (chart.series(i).count > 0 && chart.series(i).at(0).x < minSec) {
-                        chart.series(i).remove(0)
+                    while (chart.seriesList[i].count > 0 && chart.seriesList[i].at(0).x < minSec) {
+                        chart.seriesList[i].remove(0)
                     }
                 }
             }
@@ -172,154 +167,80 @@ RowLayout {
         property int _maxPointCount:    10000 / interval
     }
 
-    QGCFlickable {
-        contentWidth:           parent.width * (_showCharts ? 0.4 : 1)
-        contentHeight:          rightColumn.height
-        Layout.fillHeight:      true
-        Layout.minimumWidth:    contentWidth
-        Layout.maximumWidth:    contentWidth
-        Layout.alignment:       Qt.AlignTop
+    Column {
+        id:                 leftPanel
+        Layout.fillWidth:   true
+        Layout.alignment:   Qt.AlignTop
+        spacing:            ScreenTools.defaultFontPixelHeight / 4
+        clip:               true // chart has redraw problems
 
-        Column {
-            spacing:            _margins
-            Layout.alignment:   Qt.AlignTop
-
-            width:          parent.width
-            id:             rightColumn
-
-            Row {
-                id:        _autotuneSelectRow
-                spacing:   _margins
-                visible:   showAutoTuning
-
-                Switch {
-                    id:        autotuningEnabled
-                    checked:   true
-                }
-
-                QGCLabel {
-                    color:   qgcPal.text
-                    text:    autotuningEnabled.checked ? qsTr("Autotune enabled") : qsTr("Autotune disabled")
-                }
-            }
-
-            Column {
-                width:     parent.width
-                visible:   _autotuneSelectRow.visible && autotuningEnabled.checked
-
-                AutotuneUI {
-                    anchors {
-                        top:         parent.top
-                        topMargin:   _margins * 2
-                    }
-
-                    width:     parent.width
-                }
-            }
-
-            Column {
-                width:     parent.width
-                visible:   !_autotuneSelectRow.visible || !autotuningEnabled.checked
-
-                Column {
-                    RowLayout {
-                        spacing: _margins
-                        visible: axis.length > 1
-
-                        QGCLabel { text: qsTr("Select Tuning:") }
-
-                        Repeater {
-                            model: axis
-                            QGCRadioButton {
-                                text:           modelData.name
-                                checked:        index == _currentAxis
-                                onClicked: _currentAxis = index
-                            }
-                        }
-                    }
-                }
-
-                // Instantiate all sliders (instead of switching the model), so that
-                // values are not changed unexpectedly if they do not match with a tick
-                // value
-                Repeater {
-                    model: axis
-                    FactSliderPanel {
-                        width:       parent.width
-                        visible:     _currentAxis === index
-                        sliderModel: axis[index].params
-                    }
-                }
-
-                Column {
-                    QGCLabel { text: qsTr("Clipboard Values:") }
-
-                    GridLayout {
-                        rows:           savedRepeater.model.length
-                        flow:           GridLayout.TopToBottom
-                        rowSpacing:     0
-                        columnSpacing:  _margins
-
-                        Repeater {
-                            model: axis[_currentAxis].params
-
-                            QGCLabel { text: param }
-                        }
-
-                        Repeater {
-                            id: savedRepeater
-
-                            QGCLabel { text: modelData }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    spacing: _margins
-
-                    QGCButton {
-                        text:       qsTr("Save To Clipboard")
-                        onClicked:  saveTuningParamValues()
-                    }
-
-                    QGCButton {
-                        text:       qsTr("Restore From Clipboard")
-                        onClicked:  resetToSavedTuningParamValues()
-                    }
-                }
-            }
+        QGCLabel {
+            id:                 chartTitleLabel
+            text:               _chartTitle
+            font.pointSize:     ScreenTools.defaultFontPointSize
+            font.family:        ScreenTools.normalFontFamily
+            anchors.horizontalCenter: parent.horizontalCenter
         }
-    }
 
-    ColumnLayout {
-        visible:            _showCharts
+        GraphsView {
+            id:                     chart
+            width:                  Math.max(_minChartWidth, availableWidth - rightPanel.width - parent.spacing - _margins)
+            height:                 Math.max(_minChartHeight, availableHeight - leftPanelBottomColumn.height - chartTitleLabel.height - legendRow.height - parent.spacing * 3 - _margins)
 
-        ChartView {
-            id:                 chart
-            antialiasing:       true
-            legend.alignment:   Qt.AlignBottom
-            Layout.fillHeight:  true
-            Layout.fillWidth:   true
+            property real _minChartWidth:   ScreenTools.defaultFontPixelWidth * 40
+            property real _minChartHeight:  ScreenTools.defaultFontPixelHeight * 15
+
+            theme: GraphsTheme {
+                colorScheme:            qgcPal.globalTheme === QGCPalette.Light ? GraphsTheme.ColorScheme.Light : GraphsTheme.ColorScheme.Dark
+                plotAreaBackgroundColor: qgcPal.window
+                grid.mainColor:         Qt.rgba(qgcPal.textPrimary.r, qgcPal.textPrimary.g, qgcPal.textPrimary.b, 0.5)
+                grid.subColor:          Qt.rgba(qgcPal.textPrimary.r, qgcPal.textPrimary.g, qgcPal.textPrimary.b, 0.3)
+                grid.mainWidth:         1
+                labelBackgroundVisible: false
+                labelTextColor:         qgcPal.textPrimary
+            }
+
+            axisX: ValueAxis {
+                id:                     xAxis
+                min:                    0
+                max:                    0
+                labelFormat:            "%.1f"
+                titleText:              ScreenTools.isShortScreen ? "" : qsTr("sec")
+                titleFont.pointSize:    ScreenTools.defaultFontPointSize
+                titleFont.family:       ScreenTools.normalFontFamily
+            }
+
+            axisY: ValueAxis {
+                id:                     yAxis
+                min:                    0
+                max:                    10
+                titleText:              unit
+                tickInterval:           _tickSeparation
+                titleFont.pointSize:    ScreenTools.defaultFontPointSize
+                titleFont.family:       ScreenTools.normalFontFamily
+            }
 
             // enable mouse dragging
             MouseArea {
                 property var _startPoint: undefined
                 property double _scaling: 0
                 anchors.fill: parent
-                onPressed: {
+                onPressed: (mouse) => {
                     _startPoint = Qt.point(mouse.x, mouse.y)
-                    var start = chart.mapToValue(_startPoint)
-                    var next = chart.mapToValue(Qt.point(mouse.x+1, mouse.y+1))
-                    _scaling = next.x - start.x
+                    if (chart.seriesList.length > 0) {
+                        var start = chart.seriesList[0].dataPointCoordinatesAt(_startPoint.x, _startPoint.y)
+                        var next = chart.seriesList[0].dataPointCoordinatesAt(mouse.x+1, mouse.y+1)
+                        _scaling = next.x - start.x
+                    }
                 }
-                onWheel: {
+                onWheel: (wheel) => {
                     if (wheel.angleDelta.y > 0)
                         chartDisplaySec /= 1.2
                     else
                         chartDisplaySec *= 1.2
                     _xAxis.min = _xAxis.max - chartDisplaySec
                 }
-                onPositionChanged: {
+                onPositionChanged: (mouse) => {
                     if(_startPoint != undefined) {
                         dataTimer.running = false
                         var cp = Qt.point(mouse.x, mouse.y)
@@ -336,58 +257,200 @@ RowLayout {
             }
         }
 
-        Item { width: 1; height: 1 }
+        Row {
+            id:         legendRow
+            spacing:    ScreenTools.defaultFontPixelWidth
+            anchors.horizontalCenter: parent.horizontalCenter
 
-        RowLayout {
-            spacing: _margins
-
-            QGCButton {
-                text:       qsTr("Clear")
-                onClicked:  resetGraphs()
-            }
-
-            QGCButton {
-                text:       dataTimer.running ? qsTr("Stop") : qsTr("Start")
-                onClicked: {
-                    dataTimer.running = !dataTimer.running
-                    _last_t = 0
-                    if (showAutoModeChange && autoModeChange.checked) {
-                        globals.activeVehicle.flightMode = dataTimer.running ? "Stabilized" : globals.activeVehicle.pauseFlightMode
+            Repeater {
+                model: _legendModel
+                Row {
+                    spacing: ScreenTools.defaultFontPixelWidth / 2
+                    Rectangle {
+                        width:  ScreenTools.defaultFontPixelHeight
+                        height: ScreenTools.defaultFontPixelHeight / 3
+                        color:  modelData.color
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    QGCLabel {
+                        text:               modelData.name
+                        font.pointSize:     ScreenTools.smallFontPointSize
                     }
                 }
-            }
-            Connections {
-                target: globals.activeVehicle
-                onArmedChanged: {
-                    if (armed && !dataTimer.running) { // start plotting on arming if not already running
-                        dataTimer.running = true
-                        _last_t = 0
-                    }
-                }
-            }
-        }
-
-        QGCCheckBox {
-            visible: showAutoModeChange
-            id:     autoModeChange
-            text:   qsTr("Automatic Flight Mode Switching")
-            onClicked: {
-                if (checked)
-                    dataTimer.running = false
             }
         }
 
         Column {
-            visible: autoModeChange.checked
-            QGCLabel {
-                text:            qsTr("Switches to 'Stabilized' when you click Start.")
-                font.pointSize:     ScreenTools.smallFontPointSize
+            id:         leftPanelBottomColumn
+            spacing:    ScreenTools.defaultFontPixelHeight / 4
+
+            RowLayout {
+                spacing: _margins
+
+                QGCButton {
+                    text:       qsTr("Clear")
+                    onClicked:  resetGraphs()
+                }
+
+                QGCButton {
+                    text:       dataTimer.running ? qsTr("Stop") : qsTr("Start")
+                    onClicked: {
+                        dataTimer.running = !dataTimer.running
+                        _last_t = 0
+                        if (showAutoModeChange && autoModeChange.checked) {
+                            globals.activeVehicle.flightMode = dataTimer.running ? globals.activeVehicle.stabilizedFlightMode : globals.activeVehicle.pauseFlightMode
+                        }
+                    }
+                }
+                Connections {
+                    target: globals.activeVehicle
+                    onArmedChanged: {
+                        if (armed && !dataTimer.running) { // start plotting on arming if not already running
+                            dataTimer.running = true
+                            _last_t = 0
+                        }
+                    }
+                }
             }
 
-            QGCLabel {
-                text:            qsTr("Switches to '%1' when you click Stop.").arg(globals.activeVehicle.pauseFlightMode)
-                font.pointSize:     ScreenTools.smallFontPointSize
+            QGCCheckBox {
+                visible: showAutoModeChange
+                id:     autoModeChange
+                text:   qsTr("Automatic Flight Mode Switching")
+                onClicked: {
+                    if (checked)
+                        dataTimer.running = false
+                }
+            }
+
+            Column {
+                visible: autoModeChange.checked
+                QGCLabel {
+                    text:            qsTr("Switches to 'Stabilized' when you click Start.")
+                    font.pointSize:     ScreenTools.smallFontPointSize
+                }
+
+                QGCLabel {
+                    text:            qsTr("Switches to '%1' when you click Stop.").arg(globals.activeVehicle.pauseFlightMode)
+                    font.pointSize:     ScreenTools.smallFontPointSize
+                }
             }
         }
     }
+
+    ColumnLayout {
+        id:                 rightPanel
+        Layout.alignment:   Qt.AlignTop
+
+        RowLayout {
+            visible: showAutoTuning
+
+            QGCRadioButton {
+                id:         useAutoTuningRadio
+                text:       qsTr("Use auto-tuning")
+                checked:    useAutoTuning
+                onClicked:  useAutoTuning = true
+            }
+            QGCRadioButton {
+                id:         useManualTuningRadio
+                text:       qsTr("Use manual tuning")
+                checked:    !useAutoTuning
+                onClicked:  useAutoTuning = false
+            }
+        }
+
+        AutotuneUI {
+            visible: showAutoTuning && useAutoTuningRadio.checked
+        }
+
+        ColumnLayout {
+            visible: !showAutoTuning || useManualTuningRadio.checked
+
+            Column {
+                RowLayout {
+                    spacing: _margins
+                    visible: axis.length > 1
+
+                    QGCLabel { text: qsTr("Select Tuning:") }
+
+                    Repeater {
+                        model: axis
+                        QGCRadioButton {
+                            objectName:     "pidTuning_axisButton_" + modelData.name.replace(/ /g, "")
+                            text:           modelData.name
+                            checked:        index == _currentAxis
+                            onClicked: _currentAxis = index
+                        }
+                    }
+                }
+            }
+
+            // Instantiate all sliders (instead of switching the model), so that
+            // values are not changed unexpectedly if they do not match with a tick value.
+            Repeater {
+                model: axis
+
+                Repeater {
+                    id: paramRepeater
+                    model: axis[index].params
+
+                    property int axisIndex: index
+
+                    QGCGroupBox {
+                        id:                     tuningGroup
+                        heading:                title
+                        headingDescription:     description
+                        visible:                _currentAxis === paramRepeater.axisIndex
+                        Layout.preferredWidth:  ScreenTools.defaultFontPixelWidth * 40
+
+                        FactSlider {
+                            fact:                   controller.getParameterFact(-1, param)
+                            from:                   min
+                            to:                     max
+                            majorTickStepSize:      step
+                            Layout.fillWidth:       true
+                        }
+                    }
+                }
+            }
+
+            Column {
+                QGCLabel { text: qsTr("Clipboard Values:") }
+
+                GridLayout {
+                    rows:           savedRepeater.model.length
+                    flow:           GridLayout.TopToBottom
+                    rowSpacing:     0
+                    columnSpacing:  _margins
+
+                    Repeater {
+                        model: axis[_currentAxis].params
+
+                        QGCLabel { text: param }
+                    }
+
+                    Repeater {
+                        id: savedRepeater
+
+                        QGCLabel { text: modelData }
+                    }
+                }
+            }
+
+            RowLayout {
+                spacing: _margins
+
+                QGCButton {
+                    text:       qsTr("Save To Clipboard")
+                    onClicked:  saveTuningParamValues()
+                }
+
+                QGCButton {
+                    text:       qsTr("Restore From Clipboard")
+                    onClicked:  resetToSavedTuningParamValues()
+                }
+            }
+        }
+    }
+
 } // RowLayout

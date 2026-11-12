@@ -1,8 +1,8 @@
-import QtQuick                  2.15
-import QtQuick.Controls         2.15
+import QtQuick
+import QtQuick.Controls
 
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Palette       1.0
+import QGroundControl
+import QGroundControl.Controls
 
 /// The SliderSwitch control implements a sliding switch control similar to the power off
 /// control on an iPhone. It supports holding the space bar to slide the switch.
@@ -11,43 +11,34 @@ Rectangle {
     implicitWidth:  label.contentWidth + (_diameter * 2.5) + (_border * 4)
     implicitHeight: label.height * 2.5
     radius:         height /2
-    color:          qgcPal.windowShade
+    color:          qgcPal.windowCard
 
     signal accept   ///< Action confirmed
 
     property string confirmText                         ///< Text for slider
     property alias  fontPointSize: label.font.pointSize ///< Point size for text
 
-    property real _border:                      4   
+    property real _border:                      4
     property real _diameter:                    height - (_border * 2)
     property real _dragStartX:                  _border
     property real _dragStopX:                   _root.width - (_diameter + _border)
-    property bool _waitingForLastAutoRepeat:    false
 
-    Keys.onSpacePressed: {
-        if (visible && event.modifiers === Qt.NoModifier && event.isAutoRepeat && !sliderDragArea.drag.active) {
+    Keys.onSpacePressed: (event) => {
+        if (visible && event.modifiers === Qt.NoModifier && !sliderDragArea.drag.active) {
             event.accepted = true
-            if (_waitingForLastAutoRepeat) {
-                resetSpaceBarSliding()
-                accept()
-            } else {
-                sliderAnimation.start()
-                spaceBarTimout.restart()
-            }
+            sliderAnimation.start()
+        }
+    }
+
+    Keys.onReleased: (event) => {
+        if (visible && event.key === Qt.Key_Space && !event.isAutoRepeat) {
+            event.accepted = true
+            resetSpaceBarSliding()
         }
     }
 
     function resetSpaceBarSliding() {
-        _waitingForLastAutoRepeat = false
-        spaceBarTimout.stop()
         slider.reset()
-    }
-
-    Timer {
-        id:             spaceBarTimout
-        interval:       200
-        repeat:         false
-        onTriggered:    _root.resetSpaceBarSliding()
     }
 
     QGCPalette { id: qgcPal; colorGroupEnabled: true }
@@ -59,7 +50,7 @@ Rectangle {
         anchors.verticalCenter:     parent.verticalCenter
         horizontalAlignment:        Text.AlignHCenter
         text:                       confirmText
-        color:                      qgcPal.buttonText
+        color:                      qgcPal.textPrimary
     }
 
     Rectangle {
@@ -69,7 +60,7 @@ Rectangle {
         height:     _diameter
         width:      _diameter
         radius:     _diameter / 2
-        color:      qgcPal.primaryButton
+        color:      qgcPal.accent
 
         QGCColoredImage {
             anchors.centerIn:       parent
@@ -79,7 +70,7 @@ Rectangle {
             fillMode:               Image.PreserveAspectFit
             smooth:                 false
             mipmap:                 false
-            color:                  qgcPal.buttonText
+            color:                  qgcPal.textPrimary
             cache:                  false
             source:                 "/res/ArrowRight.svg"
         }
@@ -90,7 +81,11 @@ Rectangle {
             from:       _dragStartX
             to:         _dragStopX
             running:    false
-            onFinished: _waitingForLastAutoRepeat = true
+
+            onFinished: {
+                slider.reset()
+                _root.accept()
+            }
         }
 
         function reset() {

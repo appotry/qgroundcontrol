@@ -1,11 +1,10 @@
-import QtQuick 2.12
-import QtQuick.Controls 1.2
-import QtQuick.Layouts 1.3
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 
-import QGroundControl               1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.FactControls  1.0
-import QGroundControl.ScreenTools   1.0
+import QGroundControl
+import QGroundControl.Controls
+import QGroundControl.FactControls
 
 Loader {
 	property var fact
@@ -46,9 +45,8 @@ Loader {
 			text:           qsTr("(Param not available)")
 		}
 	}
-	sourceComponent: fact ? 
-		(fact.enumStrings.length > 0 ? factComboBox : 
+	sourceComponent: fact ?
+		(fact.enumStrings.length > 0 ? factComboBox :
 			(fact.readOnly ? factReadOnly : (fact.typeIsBool ? factCheckbox : factTextField))
 		) : notAvailable
 }
-

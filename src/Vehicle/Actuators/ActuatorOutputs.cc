@@ -1,15 +1,9 @@
-/****************************************************************************
- *
- * (c) 2021 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #include "ActuatorOutputs.h"
+#include "MAVLinkLib.h"
+#include "ParameterManager.h"
+#include "QGCLoggingCategory.h"
 
-#include <QDebug>
+QGC_LOGGING_CATEGORY(ActuatorOutputsLog, "Vehicle.Actuators.ActuatorOutputs")
 
 using namespace ActuatorOutputs;
 
@@ -29,8 +23,8 @@ ActuatorOutputChannel::ActuatorOutputChannel(QObject *parent, const QString &lab
         param.replace("${i}", sparamIndex);
 
         Fact* fact = nullptr;
-        if (parameterManager->parameterExists(FactSystem::defaultComponentId, param)) {
-            fact = parameterManager->getParameter(FactSystem::defaultComponentId, param);
+        if (parameterManager->parameterExists(ParameterManager::defaultComponentId, param)) {
+            fact = parameterManager->getParameter(ParameterManager::defaultComponentId, param);
             if (channelConfig->displayOption() == Parameter::DisplayOption::Bitset) {
                 fact = new FactBitset(channelConfig, fact, paramIndex + channelConfig->indexOffset());
             } else if (channelConfig->displayOption() == Parameter::DisplayOption::BoolTrueIfPositive) {
@@ -38,7 +32,7 @@ ActuatorOutputChannel::ActuatorOutputChannel(QObject *parent, const QString &lab
             }
             factAddedCb(fact);
         } else {
-            qCDebug(ActuatorsConfigLog) << "ActuatorOutputChannel: Param does not exist:" << param;
+            qCDebug(ActuatorOutputsLog) << "ActuatorOutputChannel: Param does not exist:" << param;
         }
 
         ChannelConfigInstance *instance = new ChannelConfigInstance(this, fact, *channelConfig);
@@ -99,12 +93,11 @@ void ActuatorOutput::getAllChannelFunctions(QList<Fact*> &allFunctions) const
     });
 }
 
-bool ActuatorOutput::hasExistingOutputFunctionParams() const
-{
+bool ActuatorOutput::hasExistingOutputFunctionParams() const {
     bool hasExistingOutputFunction = false;
-    forEachOutputFunction([&hasExistingOutputFunction](ActuatorOutputSubgroup*, ChannelConfigInstance*, Fact* fact) {
-        hasExistingOutputFunction = true;
-    });
+    forEachOutputFunction([&hasExistingOutputFunction](
+            ActuatorOutputSubgroup *, ChannelConfigInstance *,
+            [[maybe_unused]] Fact *fact) { hasExistingOutputFunction = true; });
     return hasExistingOutputFunction;
 }
 
@@ -119,6 +112,23 @@ void ActuatorOutput::forEachOutputFunction(std::function<void(ActuatorOutputSubg
                 Fact* fact = configInstance->fact();
                 if (configInstance->channelConfig()->function() == ChannelConfig::Function::OutputFunction && fact) {
                     callback(subgroup, configInstance, fact);
+                }
+            }
+        }
+    }
+}
+
+void ActuatorOutput::forEachChannelFunction(std::function<void(ActuatorOutputChannel*, Fact*)> callback) const
+{
+    for (int subgroupIdx = 0; subgroupIdx < _subgroups->count(); subgroupIdx++) {
+        ActuatorOutputSubgroup *subgroup = qobject_cast<ActuatorOutputSubgroup*>(_subgroups->get(subgroupIdx));
+        for (int channelIdx = 0; channelIdx < subgroup->channels()->count(); channelIdx++) {
+            ActuatorOutputChannel *channel = qobject_cast<ActuatorOutputChannel*>(subgroup->channels()->get(channelIdx));
+            for (int configIdx = 0; configIdx < channel->configInstances()->count(); configIdx++) {
+                ChannelConfigInstance *configInstance = qobject_cast<ChannelConfigInstance*>(channel->configInstances()->get(configIdx));
+                Fact* fact = configInstance->fact();
+                if (configInstance->channelConfig()->function() == ChannelConfig::Function::OutputFunction && fact) {
+                    callback(channel, fact);
                 }
             }
         }

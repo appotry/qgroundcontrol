@@ -1,17 +1,12 @@
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Dialogs  1.2
-import QtQuick.Extras   1.4
-import QtQuick.Layouts  1.2
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Dialogs
+import QtQuick.Layouts
 
-import QGroundControl               1.0
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Vehicle       1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.FactSystem    1.0
-import QGroundControl.FactControls  1.0
-import QGroundControl.Palette       1.0
-import QGroundControl.FlightMap     1.0
+import QGroundControl
+import QGroundControl.Controls
+import QGroundControl.FactControls
+import QGroundControl.FlightMap
 
 TransectStyleComplexItemEditor {
     transectAreaDefinitionComplete: missionItem.surveyAreaPolygon.isValid
@@ -19,10 +14,6 @@ TransectStyleComplexItemEditor {
     transectValuesHeaderName:       qsTr("Transects")
     transectValuesComponent:        _transectValuesComponent
     presetsTransectValuesComponent: _transectValuesComponent
-
-    // The following properties must be available up the hierarchy chain
-    //  property real   availableWidth    ///< Width for control
-    //  property var    missionItem       ///< Mission Item for editor
 
     property real   _margin:        ScreenTools.defaultFontPixelWidth / 2
     property var    _missionItem:   missionItem
@@ -45,16 +36,15 @@ TransectStyleComplexItemEditor {
 
             QGCSlider {
                 id:                     angleSlider
-                minimumValue:           0
-                maximumValue:           359
+                from:           0
+                to:           359
                 stepSize:               1
-                tickmarksEnabled:       false
                 Layout.fillWidth:       true
                 Layout.columnSpan:      2
                 Layout.preferredHeight: ScreenTools.defaultFontPixelHeight * 1.5
                 onValueChanged:         missionItem.gridAngle.value = value
                 Component.onCompleted:  value = missionItem.gridAngle.value
-                updateValueWhileDragging: true
+                live: true
             }
 
             QGCLabel {
@@ -76,13 +66,13 @@ TransectStyleComplexItemEditor {
                     {
                         text:       qsTr("Hover and capture image"),
                         fact:       missionItem.hoverAndCapture,
-                        enabled:    missionItem.cameraCalc.distanceMode === QGroundControl.AltitudeModeRelative || missionItem.cameraCalc.distanceMode === QGroundControl.AltitudeModeAbsolute,
+                        enabled:    missionItem.cameraCalc.distanceMode === QGroundControl.AltitudeFrameRelative || missionItem.cameraCalc.distanceMode === QGroundControl.AltitudeFrameAbsolute,
                         visible:    missionItem.hoverAndCaptureAllowed
                     },
                     {
                         text:       qsTr("Refly at 90 deg offset"),
                         fact:       missionItem.refly90Degrees,
-                        enabled:    missionItem.cameraCalc.distanceMode !== QGroundControl.AltitudeModeCalcAboveTerrain,
+                        enabled:    missionItem.cameraCalc.distanceMode !== QGroundControl.AltitudeFrameCalcAboveTerrain,
                         visible:    true
                     },
                     {
@@ -96,8 +86,23 @@ TransectStyleComplexItemEditor {
                         fact:       missionItem.flyAlternateTransects,
                         enabled:    true,
                         visible:    _vehicle ? (_vehicle.fixedWing || _vehicle.vtol) : false
+                    },
+                    {
+                        text:       qsTr("Split concave polygons"),
+                        fact:       missionItem.splitConcavePolygons,
+                        enabled:    true,
+                        visible:    true
                     }
                 ]
+            }
+
+            QGCLabel {
+                Layout.columnSpan:  2
+                Layout.fillWidth:   true
+                wrapMode:           Text.WordWrap
+                font.pointSize:     ScreenTools.smallFontPointSize
+                text:               qsTr("Images are also taken across concave gaps when images in turnarounds is enabled.")
+                visible:            !forPresets && missionItem.splitConcavePolygons.rawValue && missionItem.cameraTriggerInTurnAround.rawValue
             }
         }
     }
@@ -105,9 +110,8 @@ TransectStyleComplexItemEditor {
     KMLOrSHPFileDialog {
         id:             kmlOrSHPLoadDialog
         title:          qsTr("Select Polygon File")
-        selectExisting: true
 
-        onAcceptedForLoad: {
+        onAcceptedForLoad: (file) => {
             missionItem.surveyAreaPolygon.loadKMLOrSHPFile(file)
             missionItem.resetState = false
             //editorMap.mapFitFunctions.fitMapViewportTomissionItems()

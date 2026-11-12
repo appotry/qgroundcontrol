@@ -1,27 +1,15 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Dialogs
 
-
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Layouts  1.2
-import QtQuick.Dialogs  1.2
-
-import QGroundControl               1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Palette       1.0
+import QGroundControl
+import QGroundControl.Controls
 
 QGCPopupDialog {
     id:         root
     title:      qsTr("Select Mission Command")
-    buttons:    StandardButton.Cancel
+    buttons:    Dialog.Cancel
 
     property var    vehicle
     property var    missionItem
@@ -51,7 +39,7 @@ QGCPopupDialog {
                     categorySelected(category)
                 }
 
-                onActivated: categorySelected(textAt(index))
+                onActivated: (index) => { categorySelected(textAt(index)) }
             }
         }
 
@@ -62,10 +50,10 @@ QGCPopupDialog {
             delegate: Rectangle {
                 width:  parent.width
                 height: commandColumn.height + ScreenTools.defaultFontPixelHeight
-                color:  QGroundControl.globalPalette.button
+                color:  QGroundControl.globalPalette.windowCard
 
                 property var    mavCmdInfo: modelData
-                property color  textColor:  QGroundControl.globalPalette.buttonText
+                property color  textColor:  QGroundControl.globalPalette.textPrimary
 
                 Column {
                     id:                 commandColumn
@@ -77,7 +65,7 @@ QGCPopupDialog {
                     QGCLabel {
                         text:           mavCmdInfo.friendlyName
                         color:          textColor
-                        font.family:    ScreenTools.demiboldFontFamily
+                        font.bold:      true
                     }
 
                     QGCLabel {

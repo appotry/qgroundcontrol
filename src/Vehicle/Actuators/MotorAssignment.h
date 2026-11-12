@@ -1,21 +1,17 @@
-/****************************************************************************
- *
- * (c) 2021 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #pragma once
 
-#include <QObject>
-#include <QString>
-#include <QTimer>
+#include "VehicleTypes.h"
+#include "MAVLinkMessageType.h"
+#include "MAVLinkEnums.h"
+#include "QGCMAVLinkTypes.h"
 
-#include "Common.h"
+#include <QtCore/QObject>
+#include <QtCore/QString>
+#include <QtCore/QTimer>
 
-#include "QmlControls/QmlObjectListModel.h"
+class Fact;
+class QmlObjectListModel;
+class Vehicle;
 
 /**
  * Handles automatic motor ordering assignment by spinning individual motors, and then having the user
@@ -62,9 +58,8 @@ private:
     static constexpr int _spinTimeoutDefaultSec = 1000;
     static constexpr int _spinTimeoutHighSec = 3000; ///< wait a bit longer after assigning motors, so ESCs can initialize
 
-    static void ackHandlerEntry(void* resultHandlerData, int compId, MAV_RESULT commandResult, uint8_t progress,
-            Vehicle::MavCmdResultFailureCode_t failureCode);
-    void ackHandler(MAV_RESULT commandResult, Vehicle::MavCmdResultFailureCode_t failureCode);
+    static void ackHandlerEntry(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, VehicleTypes::MavCmdResultFailureCode_t failureCode);
+    void ackHandler(MAV_RESULT commandResult, VehicleTypes::MavCmdResultFailureCode_t failureCode);
     void sendMavlinkRequest(int function, float value);
 
     enum class State {
@@ -88,4 +83,3 @@ private:
     QList<QList<Fact*>> _functionFacts;
     QString _message; ///< current message to show to the user after initializing
 };
-

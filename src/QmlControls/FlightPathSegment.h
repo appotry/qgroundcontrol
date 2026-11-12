@@ -1,28 +1,20 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #pragma once
 
-#include <QObject>
-#include <QGeoCoordinate>
-#include <QTimer>
+#include <QtCore/QObject>
+#include <QtCore/QTimer>
+#include <QtPositioning/QGeoCoordinate>
+#include <QtQmlIntegration/QtQmlIntegration>
 
-#include "TerrainQuery.h"
-#include "QGCLoggingCategory.h"
+#include "TerrainPathHeightInfo.h"
 
-Q_DECLARE_LOGGING_CATEGORY(FlightPathSegmentLog)
+class TerrainPathQuery;
 
 // Important Note: The altitudes in the coordinates must be AMSL
 class FlightPathSegment : public QObject
 {
     Q_OBJECT
-    
+    QML_ELEMENT
+    QML_UNCREATABLE("")
 public:
     enum SegmentType {
         SegmentTypeTakeoff,         // Takeoff segments ignore the first part of the segment for terrain collisions
@@ -80,7 +72,7 @@ signals:
 
 private slots:
     void _sendTerrainPathQuery      (void);
-    void _terrainDataReceived       (bool success, const TerrainPathQuery::PathHeightInfo_t& pathHeightInfo);
+    void _terrainDataReceived       (bool success, const TerrainPathHeightInfo& pathHeightInfo);
     void _updateTotalDistance       (void);
     void _updateTerrainCollision    (void);
 

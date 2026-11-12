@@ -1,24 +1,11 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #pragma once
 
 #include "ComplexMissionItem.h"
 #include "MissionItem.h"
 #include "SettingsFact.h"
-#include "QGCLoggingCategory.h"
-#include "QGCMapPolyline.h"
 #include "QGCMapPolygon.h"
 #include "CameraCalc.h"
 #include "TerrainQuery.h"
-
-Q_DECLARE_LOGGING_CATEGORY(TransectStyleComplexItemLog)
 
 class PlanMasterController;
 
@@ -41,6 +28,10 @@ public:
     Q_PROPERTY(double           coveredArea                 READ coveredArea                                        NOTIFY coveredAreaChanged)
     Q_PROPERTY(bool             hoverAndCaptureAllowed      READ hoverAndCaptureAllowed                             CONSTANT)
     Q_PROPERTY(QVariantList     visualTransectPoints        READ visualTransectPoints                               NOTIFY visualTransectPointsChanged)
+    /// Indices into visualTransectPoints of each survey entry/exit. Empty when the transects have not been rebuilt
+    /// since load, in which case the transect structure is unknown.
+    Q_PROPERTY(QList<int> visualTransectEntryIndices READ visualTransectEntryIndices NOTIFY visualTransectPointsChanged)
+    Q_PROPERTY(QList<int> visualTransectExitIndices READ visualTransectExitIndices NOTIFY visualTransectPointsChanged)
 
     Q_PROPERTY(Fact*            terrainAdjustTolerance      READ terrainAdjustTolerance                             CONSTANT)
     Q_PROPERTY(Fact*            terrainAdjustMaxDescentRate READ terrainAdjustMaxDescentRate                        CONSTANT)
@@ -49,6 +40,10 @@ public:
     QGCMapPolygon*  surveyAreaPolygon   (void) { return &_surveyAreaPolygon; }
     CameraCalc*     cameraCalc          (void) { return &_cameraCalc; }
     QVariantList    visualTransectPoints(void) { return _visualTransectPoints; }
+
+    QList<int> visualTransectEntryIndices(void) const { return _visualTransectEntryIndices; }
+
+    QList<int> visualTransectExitIndices(void) const { return _visualTransectExitIndices; }
 
     Fact* turnAroundDistance            (void) { return &_turnAroundDistanceFact; }
     Fact* cameraTriggerInTurnAround     (void) { return &_cameraTriggerInTurnAroundFact; }
@@ -86,38 +81,43 @@ public:
     bool                specifiesCoordinate         (void) const override = 0;
     void                appendMissionItems          (QList<MissionItem*>& items, QObject* missionItemParent) final;
     void                applyNewAltitude            (double newAltitude) final;
+    bool usesAltitudeFrame(QGroundControlQmlGlobal::AltitudeFrame altitudeFrame) const final;
     bool                dirty                       (void) const final { return _dirty; }
     bool                isSimpleItem                (void) const final { return false; }
     bool                isStandaloneCoordinate      (void) const final { return false; }
     bool                specifiesAltitudeOnly       (void) const final { return false; }
-    QGeoCoordinate      coordinate                  (void) const final { return _coordinate; }
+    QGeoCoordinate      coordinate                  (void) const final { return entryCoordinate(); }
+    QGeoCoordinate      entryCoordinate             (void) const final { return _entryCoordinate; }
     QGeoCoordinate      exitCoordinate              (void) const final { return _exitCoordinate; }
     int                 sequenceNumber              (void) const final { return _sequenceNumber; }
     double              specifiedFlightSpeed        (void) final { return std::numeric_limits<double>::quiet_NaN(); }
     double              specifiedGimbalYaw          (void) final { return std::numeric_limits<double>::quiet_NaN(); }
     double              specifiedGimbalPitch        (void) final { return std::numeric_limits<double>::quiet_NaN(); }
-    void                setMissionFlightStatus      (MissionController::MissionFlightStatus_t& missionFlightStatus) final;
+    void                setMissionFlightStatus      (MissionFlightStatus_t& missionFlightStatus) final;
     ReadyForSaveState   readyForSaveState         (void) const override;
     QString             commandDescription          (void) const override { return tr("Transect"); }
     QString             commandName                 (void) const override { return tr("Transect"); }
     QString             abbreviation                (void) const override { return tr("T"); }
     bool                exitCoordinateSameAsEntry   (void) const final { return false; }
     void                setDirty                    (bool dirty) final;
-    void                setCoordinate               (const QGeoCoordinate& coordinate) final { Q_UNUSED(coordinate); }
+    void                setCoordinate               (const QGeoCoordinate& coordinate) override;
     void                setSequenceNumber           (int sequenceNumber) final;
+    double              editableAlt                 (void) const final;
     double              amslEntryAlt                (void) const final;
     double              amslExitAlt                 (void) const final;
     double              minAMSLAltitude             (void) const final;
     double              maxAMSLAltitude             (void) const final;
 
-    static const char* turnAroundDistanceName;
-    static const char* turnAroundDistanceMultiRotorName;
-    static const char* cameraTriggerInTurnAroundName;
-    static const char* hoverAndCaptureName;
-    static const char* refly90DegreesName;
-    static const char* terrainAdjustToleranceName;
-    static const char* terrainAdjustMaxClimbRateName;
-    static const char* terrainAdjustMaxDescentRateName;
+    static constexpr const char* turnAroundDistanceName                = "TurnAroundDistance";
+    static constexpr const char* turnAroundDistanceMultiRotorName      = "TurnAroundDistanceMultiRotor";
+    static constexpr const char* cameraTriggerInTurnAroundName         = "CameraTriggerInTurnAround";
+    static constexpr const char* hoverAndCaptureName                   = "HoverAndCapture";
+    static constexpr const char* refly90DegreesName                    = "Refly90Degrees";
+    static constexpr const char* terrainAdjustToleranceName            = "TerrainAdjustTolerance";
+    static constexpr const char* terrainAdjustMaxClimbRateName         = "TerrainAdjustMaxClimbRate";
+    static constexpr const char* terrainAdjustMaxDescentRateName       = "TerrainAdjustMaxDescentRate";
+
+    static constexpr int maxTransectCount = 1000; ///< Maximum number of transects allowed; spacing is raised to enforce this limit
 
 signals:
     void cameraShotsChanged             (void);
@@ -137,6 +137,8 @@ protected slots:
 protected:
     virtual void _rebuildTransectsPhase1    (void) = 0; ///< Rebuilds the _transects array
     virtual void _recalcCameraShots         (void) = 0;
+    /// Survey area boundaries for export, outer boundary first followed by any holes
+    virtual QList<QList<QGeoCoordinate>> _surveyAreaBoundaries(void) const;
 
     void    _save                           (QJsonObject& saveObject);
     bool    _load                           (const QJsonObject& complexObject, bool forPresets, QString& errorString);
@@ -144,6 +146,7 @@ protected:
     void    _setCameraShots                 (int cameraShots);
     double  _triggerDistance                (void) const;
     bool    _hasTurnaround                  (void) const;
+    static int _distanceTriggerImageCount(double transectLength, double triggerDistance);
     double  _turnAroundDistance             (void) const;
     void    _appendWaypoint                 (QList<MissionItem*>& items, QObject* missionItemParent, int& seqNum, MAV_FRAME mavFrame, float holdTime, const QGeoCoordinate& coordinate);
     void    _appendSinglePhotoCapture       (QList<MissionItem*>& items, QObject* missionItemParent, int& seqNum);
@@ -155,7 +158,7 @@ protected:
     void    _recalcComplexDistance          (void);
 
     int                 _sequenceNumber = 0;
-    QGeoCoordinate      _coordinate;
+    QGeoCoordinate      _entryCoordinate;
     QGeoCoordinate      _exitCoordinate;
     QGCMapPolygon       _surveyAreaPolygon;
 
@@ -174,6 +177,8 @@ protected:
     } CoordInfo_t;
 
     QVariantList                                _visualTransectPoints;                          ///< Used to draw the flight path visuals on the screen
+    QList<int> _visualTransectEntryIndices;
+    QList<int> _visualTransectExitIndices;
     QList<QList<CoordInfo_t>>                   _transects;
     QList<TerrainPathQuery::PathHeightInfo_t>   _rgPathHeightInfo;                              ///< Path height for each segment includes turn segments
     QList<QGeoCoordinate>                       _rgFlyThroughMissionItemCoords;
@@ -202,15 +207,15 @@ protected:
     SettingsFact _terrainAdjustMaxClimbRateFact;
     SettingsFact _terrainAdjustMaxDescentRateFact;
 
-    static const char* _jsonCameraCalcKey;
-    static const char* _jsonTransectStyleComplexItemKey;
-    static const char* _jsonVisualTransectPointsKey;
-    static const char* _jsonItemsKey;
-    static const char* _jsonTerrainFlightSpeed;
-    static const char* _jsonCameraShotsKey;
+    static constexpr const char* _jsonTransectStyleComplexItemKey      = "TransectStyleComplexItem";
+    static constexpr const char* _jsonCameraCalcKey                    = "CameraCalc";
+    static constexpr const char* _jsonVisualTransectPointsKey          = "VisualTransectPoints";
+    static constexpr const char* _jsonItemsKey                         = "Items";
+    static constexpr const char* _jsonTerrainFlightSpeed               = "TerrainFlightSpeed";
+    static constexpr const char* _jsonCameraShotsKey                   = "CameraShots";
 
-    static const int _terrainQueryTimeoutMsecs=     1000;
-    static const int _hoverAndCaptureDelaySeconds = 4;
+    static constexpr int _terrainQueryTimeoutMsecs=     1000;
+    static constexpr int _hoverAndCaptureDelaySeconds = 4;
 
 private slots:
     void _reallyQueryTransectsPathHeightInfo        (void);
@@ -245,5 +250,5 @@ private:
     QTimer                      _terrainPolyPathQueryTimer;
 
     // Deprecated json keys
-    static const char* _jsonTerrainFollowKeyDeprecated;
+    static constexpr const char* _jsonTerrainFollowKeyDeprecated = "FollowTerrain";
 };

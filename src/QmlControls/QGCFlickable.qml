@@ -1,7 +1,8 @@
-import QtQuick 2.3
+import QtQuick
+import QtQuick.Controls
 
-import QGroundControl.Palette       1.0
-import QGroundControl.ScreenTools   1.0
+import QGroundControl
+import QGroundControl.Controls
 
 /// QGC version of Flickable control that shows horizontal/vertial scroll indicators
 Flickable {
@@ -10,12 +11,12 @@ Flickable {
     clip:                   true
     maximumFlickVelocity:   (ScreenTools.realPixelDensity * 25.4) * 8   // About two inches per second
 
-    property color indicatorColor: qgcPal.text
+    property color indicatorColor: qgcPal.textPrimary
 
     Component.onCompleted: {
-        var indicatorComponent = Qt.createComponent("QGCFlickableVerticalIndicator.qml")
-        indicatorComponent.createObject(root)
-        indicatorComponent = Qt.createComponent("QGCFlickableHorizontalIndicator.qml")
-        indicatorComponent.createObject(root)
+        var indicatorComponent = Qt.createComponent("QGCFlickableScrollIndicator.qml")
+        indicatorComponent.createObject(root, { orientation: QGCFlickableScrollIndicator.Horizontal })
+        indicatorComponent = Qt.createComponent("QGCFlickableScrollIndicator.qml")
+        indicatorComponent.createObject(root, { orientation: QGCFlickableScrollIndicator.Vertical })
     }
 }

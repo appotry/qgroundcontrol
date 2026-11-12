@@ -1,134 +1,113 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Dialogs
 
-import QtQuick                      2.12
-import QtQuick.Controls             2.4
-import QtQuick.Layouts              1.12
-import QtQuick.Dialogs              1.3
-
-import QGroundControl               1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.Palette       1.0
-import QGroundControl.ScreenTools   1.0
+import QGroundControl
+import QGroundControl.Controls
 
 // Provides the standard dialog mechanism for QGC. Works 99% like Qml Dialog.
 //
 // Example usage:
+//      QGCPopupDialogFactory {
+//          id: myDialogFactory
+//          dialogComponent: myDialogComponent
+//      }
+//
 //      Component {
-//          id: dialogComponent
+//          id: myDialogComponent
 //
 //          QGCPopupDialog {
 //              ...
 //          }
 //      }
 //
-//      onFoo: dialogComponent.createObject(mainWindow).open()
+//      onFoo: myDialogFactory.open()
+//      onBar: myDialogFactory.open({ title: "My Title", myProp: someValue })
 //
 // Notes:
-//  * QGCPopupDialog should be created from a component to limit the memory usage of the dialog
-//      to only when it is displayed.
-//  * Parent for createObject should always be mainWindow.
+//  * Use QGCPopupDialogFactory to create and open dialogs. The factory handles correct parenting and cleanup of the dialog instances.
+//  * The dialog automatically reparents itself to Overlay.overlay on creation, while tracking the original parent's lifetime to prevent orphaned dialogs.
 // Differences from standard Qml Dialog:
 //  * The QGCPopupDialog object will automatically be destroyed when it closed. You can override this
 //      behaviour by setting destroyOnClose to false if it was not created dynamically.
 //  * Dialog will automatically close after accepted/rejected signal processing. You can prevent this by setting
 //      preventClose = true prior to returning from your signal handlers.
 Popup {
-    id:                 _root
-    parent:             Overlay.overlay
-    anchors.centerIn:   parent
-    width:              mainColumnLayout.width + (padding * 2)
-    height:             mainColumnLayout.y + mainColumnLayout.height + padding
-    padding:            2
+    id:                 root
+    width:  mainWindow.width
+    height: mainWindow.height
     modal:              true
     focus:              true
+    margins:            0
+
+    default property alias dialogContent: dialogContentParent.data
 
     property string title
-    property var    buttons:                StandardButton.Ok
-    property bool   acceptAllowed:          acceptButton.visible
-    property bool   rejectAllowed:          rejectButton.visible
+    property var    buttons:                Dialog.Ok
     property alias  acceptButtonEnabled:    acceptButton.enabled
     property alias  rejectButtonEnabled:    rejectButton.enabled
     property var    dialogProperties
     property bool   destroyOnClose:         true
     property bool   preventClose:           false
+    property bool   bypassNavigationCheck:  false
+
+    property real maxContentAvailableWidth:    mainWindow.width - _contentMargin * 6
+    property real maxContentAvailableHeight:   mainWindow.height - titleRowLayout.height - _contentMargin * 7
+
+    readonly property real headerMinWidth: titleLabel.implicitWidth + rejectButton.width + acceptButton.width + titleRowLayout.spacing * 2
 
     signal accepted
     signal rejected
 
-    property var    _pal:               QGroundControl.globalPalette
+    property var    _qgcPal:            QGroundControl.globalPalette
     property real   _frameSize:         ScreenTools.defaultFontPixelWidth
     property real   _contentMargin:     ScreenTools.defaultFontPixelHeight / 2
-    property real   _popupDoubleInset:  ScreenTools.defaultFontPixelHeight * 2
-    property real   _maxContentWidth:   parent.width - _popupDoubleInset
-    property real   _maxContentHeight:  parent.height - titleRowLayout.height - _popupDoubleInset
+    property bool   _acceptAllowed:     acceptButton.visible
+    property bool   _rejectAllowed:     rejectButton.visible
+    property int    _previousValidationErrorCount: 0
 
-    background: Item {
-        Rectangle {
-            anchors.left:   parent.left
-            anchors.top:    parent.top
-            width:          _frameSize
-            height:         _frameSize
-            color:          _pal.text
-            visible:        enabled
-        }
+    background: QGCMouseArea {
+        width:  mainWindow.width
+        height: mainWindow.height
 
-        Rectangle {
-            anchors.right:  parent.right
-            anchors.top:    parent.top
-            width:          _frameSize
-            height:         _frameSize
-            color:          _pal.text
-            visible:        enabled
+        onClicked: {
+            if (closePolicy & Popup.CloseOnPressOutside) {
+                _reject()
+            }
         }
+    }
 
-        Rectangle {
-            anchors.left:   parent.left
-            anchors.bottom: parent.bottom
-            width:          _frameSize
-            height:         _frameSize
-            color:          _pal.text
-            visible:        enabled
-        }
-
-        Rectangle {
-            anchors.right:  parent.right
-            anchors.bottom: parent.bottom
-            width:          _frameSize
-            height:         _frameSize
-            color:          _pal.text
-            visible:        enabled
-        }
-
-        Rectangle {
-            anchors.margins:    _root.padding
-            anchors.fill:       parent
-            color:              _pal.window
-        }
+    // We use this to track when the original parent of the dialog is destroyed. This allows us to automatically close the dialog when that happens which prevents
+    // orphaned dialogs which cause crashes.
+    Connections {
+        id: originalParentConnections
+        ignoreUnknownSignals: true // Prevents warning from initial connection when parent is null
+        onDestroyed: root.close()
     }
 
     Component.onCompleted: {
-        // The last child item will be the true dialog content.
-        // Re-Parent it to the right place in the ui hierarchy.
-        contentChildren[contentChildren.length - 1].parent = dialogContentParent
+        originalParentConnections.target = parent
+        parent = Overlay.overlay
     }
 
-    onAboutToShow: setupDialogButtons(buttons)
+    onAboutToShow: {
+        _previousValidationErrorCount = globals.validationErrorCount
+        setupDialogButtons(buttons)
+    }
+
     onClosed: {
+        globals.validationErrorCount = _previousValidationErrorCount
         Qt.inputMethod.hide()
         if (destroyOnClose) {
-            _root.destroy()
+            root.destroy()
         }
     }
 
+    onButtonsChanged: setupDialogButtons(buttons)
+
     function _accept() {
-        if (acceptAllowed) {
+        if (_acceptAllowed && (bypassNavigationCheck || mainWindow.allowViewSwitch(_previousValidationErrorCount))) {
             accepted()
             if (preventClose) {
                 preventClose = false
@@ -139,7 +118,8 @@ Popup {
     }
 
     function _reject() {
-        if (rejectAllowed) {
+        // Dialogs with cancel button are allowed to close with validation errors
+        if (_rejectAllowed && ((buttons & Dialog.Cancel) || bypassNavigationCheck || mainWindow.allowViewSwitch(_previousValidationErrorCount))) {
             rejected()
             if (preventClose) {
                 preventClose = false
@@ -155,66 +135,62 @@ Popup {
         acceptButton.visible = false
         rejectButton.visible = false
         // Accept role buttons
-        if (buttons & StandardButton.Ok) {
+        if (buttons & Dialog.Ok) {
             acceptButton.text = qsTr("Ok")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Open) {
+        } else if (buttons & Dialog.Open) {
             acceptButton.text = qsTr("Open")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Save) {
+        } else if (buttons & Dialog.Save) {
             acceptButton.text = qsTr("Save")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Apply) {
+        } else if (buttons & Dialog.Apply) {
             acceptButton.text = qsTr("Apply")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Open) {
-            acceptButton.text = qsTr("Open")
-            acceptButton.visible = true
-        } else if (buttons & StandardButton.SaveAll) {
+        } else if (buttons & Dialog.SaveAll) {
             acceptButton.text = qsTr("Save All")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Yes) {
+        } else if (buttons & Dialog.Yes) {
             acceptButton.text = qsTr("Yes")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.YesToAll) {
+        } else if (buttons & Dialog.YesToAll) {
             acceptButton.text = qsTr("Yes to All")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Retry) {
+        } else if (buttons & Dialog.Retry) {
             acceptButton.text = qsTr("Retry")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Reset) {
+        } else if (buttons & Dialog.Reset) {
             acceptButton.text = qsTr("Reset")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.RestoreToDefaults) {
+        } else if (buttons & Dialog.RestoreToDefaults) {
             acceptButton.text = qsTr("Restore to Defaults")
             acceptButton.visible = true
-        } else if (buttons & StandardButton.Ignore) {
+        } else if (buttons & Dialog.Ignore) {
             acceptButton.text = qsTr("Ignore")
             acceptButton.visible = true
         }
 
         // Reject role buttons
-        if (buttons & StandardButton.Cancel) {
+        if (buttons & Dialog.Cancel) {
             rejectButton.text = qsTr("Cancel")
             rejectButton.visible = true
-        } else if (buttons & StandardButton.Close) {
+        } else if (buttons & Dialog.Close) {
             rejectButton.text = qsTr("Close")
             rejectButton.visible = true
-        } else if (buttons & StandardButton.No) {
+        } else if (buttons & Dialog.No) {
             rejectButton.text = qsTr("No")
             rejectButton.visible = true
-        } else if (buttons & StandardButton.NoToAll) {
+        } else if (buttons & Dialog.NoToAll) {
             rejectButton.text = qsTr("No to All")
             rejectButton.visible = true
-        } else if (buttons & StandardButton.Abort) {
+        } else if (buttons & Dialog.Abort) {
             rejectButton.text = qsTr("Abort")
             rejectButton.visible = true
         }
 
-        if (rejectButton.visible) {
-            closePolicy = Popup.NoAutoClose | Popup.CloseOnEscape
-        } else {
-            closePolicy = Popup.NoAutoClose
+        closePolicy = Popup.NoAutoClose
+        if (buttons & Dialog.Cancel) {
+            closePolicy |= Popup.CloseOnEscape
         }
     }
 
@@ -223,68 +199,80 @@ Popup {
     }
 
     Rectangle {
-        width:  titleRowLayout.width
-        height: titleRowLayout.height
-        color:  qgcPal.windowShade
+        x:              mainLayout.x - _contentMargin
+        y:              mainLayout.y - _contentMargin
+        width:          mainLayout.width + _contentMargin * 2
+        height:         mainLayout.height + _contentMargin * 2
+        color:          _qgcPal.windowCard
+        radius:         root.padding / 2
+        border.width:   1
+        border.color:   _qgcPal.borderSubtle
     }
 
     ColumnLayout {
-        id:         mainColumnLayout
-        spacing:    _contentMargin
+        id:                 mainLayout
+        anchors.centerIn:   parent
+        x:                  _contentMargin
+        y:                  _contentMargin
+        spacing:            _contentMargin
 
         RowLayout {
-            id:                 titleRowLayout
-            Layout.fillWidth:   true
+            id:                     titleRowLayout
+            Layout.fillWidth:       true
+            spacing:                _contentMargin
 
             QGCLabel {
-                Layout.leftMargin:  ScreenTools.defaultFontPixelWidth
+                id:                 titleLabel
+                objectName:         "popupDialog_title"
                 Layout.fillWidth:   true
-                text:               _root.title
+                text:               root.title
                 font.pointSize:     ScreenTools.mediumFontPointSize
                 verticalAlignment:	Text.AlignVCenter
             }
 
             QGCButton {
-                id:         rejectButton
-                onClicked:  _reject()
+                id:                     rejectButton
+                objectName:             "popupDialog_rejectButton"
+                onClicked:              _reject()
+                Layout.minimumWidth:    height * 1.5
             }
 
             QGCButton {
-                id:         acceptButton
-                primary:    true
-                onClicked:  _accept()
+                id:                     acceptButton
+                objectName:             "popupDialog_acceptButton"
+                primary:                true
+                onClicked:              _accept()
+                Layout.minimumWidth:    height * 1.5
             }
         }
 
-        QGCFlickable {
-            id:                     mainFlickable
-            Layout.preferredWidth:  Math.min(Math.max(marginItem.width, mainColumnLayout.width), _maxContentWidth)
-            Layout.preferredHeight: Math.min(marginItem.height, _maxContentHeight)
-            contentWidth:           marginItem.width
-            contentHeight:          marginItem.height
+        Rectangle {
+            Layout.fillWidth:       true
+            Layout.preferredWidth:  Math.min(maxAvailableWidth, totalContentWidth)
+            Layout.preferredHeight: Math.min(maxAvailableHeight, totalContentHeight)
+            color:                  _qgcPal.window
 
-            Item {
-                id:     marginItem
-                width:  dialogContentParent.width + (_contentMargin * 2)
-                height: dialogContentParent.height + _contentMargin
+            property real totalContentWidth:    dialogContentParent.childrenRect.width + _contentMargin * 2
+            property real totalContentHeight:   dialogContentParent.childrenRect.height + _contentMargin * 2
+            property real maxAvailableWidth:    mainWindow.width - _contentMargin * 4
+            property real maxAvailableHeight:   mainWindow.height - titleRowLayout.height - _contentMargin * 5
+
+            QGCFlickable {
+                anchors.margins:    _contentMargin
+                anchors.fill:       parent
+                contentWidth:       dialogContentParent.childrenRect.width
+                contentHeight:      dialogContentParent.childrenRect.height
 
                 Item {
                     id:     dialogContentParent
-                    x:      _contentMargin
-                    width:  childrenRect.width
-                    height: childrenRect.height
                     focus:  true
 
-                    Keys.onReleased: {
-                        if (event.key === Qt.Key_Escape) {
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Escape && _rejectAllowed) {
                             _reject()
-                            event.accepted = true
-                        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            _accept()
                             event.accepted = true
                         }
                     }
-
                 }
             }
         }

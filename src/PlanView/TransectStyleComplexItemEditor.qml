@@ -1,24 +1,22 @@
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Dialogs  1.2
-import QtQuick.Extras   1.4
-import QtQuick.Layouts  1.2
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Dialogs
+import QtQuick.Layouts
 
-import QGroundControl               1.0
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Vehicle       1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.FactSystem    1.0
-import QGroundControl.FactControls  1.0
-import QGroundControl.Palette       1.0
-import QGroundControl.FlightMap     1.0
+import QGroundControl
+import QGroundControl.Controls
+import QGroundControl.FactControls
+import QGroundControl.FlightMap
 
 Rectangle {
     id:         _root
     height:     childrenRect.y + childrenRect.height + _margin
     width:      availableWidth
-    color:      qgcPal.windowShadeDark
+    color:      qgcPal.windowPanel
     radius:     _radius
+
+    required property var missionItem
+    required property real availableWidth
 
     property bool   transectAreaDefinitionComplete: true
     property string transectAreaDefinitionHelp:     _internalError
@@ -26,7 +24,7 @@ Rectangle {
     property var    transectValuesComponent:        undefined
     property var    presetsTransectValuesComponent: undefined
 
-    readonly property string _internalError: "Internal Error"
+    readonly property string _internalError: qsTr("Internal Error")
 
     property var    _missionItem:               missionItem
     property real   _margin:                    ScreenTools.defaultFontPixelWidth / 2
@@ -71,21 +69,16 @@ Rectangle {
             visible:                !transectAreaDefinitionComplete || _missionItem.wizardMode
         }
 
-        ColumnLayout {
+        QGCGroupBox {
             Layout.fillWidth:   true
-            spacing:            _margin
+            contentSpacing:     _margin
+            showDividers:       false
             visible:            transectAreaDefinitionComplete && !_missionItem.wizardMode
 
-            TransectStyleComplexItemTabBar {
-                id:                 tabBar
-                Layout.fillWidth:   true
-            }
+            Component.onCompleted: currentIndex = QGroundControl.settingsManager.planViewSettings.displayPresetsTabFirst.rawValue ? 3 : 0
 
-            // Grid tab
-            ColumnLayout {
-                Layout.fillWidth:   true
-                spacing:            _margin
-                visible:            tabBar.currentIndex === 0
+            QGCGroupBoxTab {
+                iconSource: "/qmlimages/PatternGrid.png"
 
                 QGCLabel {
                     Layout.fillWidth:   true
@@ -135,28 +128,29 @@ Rectangle {
                     Layout.fillWidth:   true
                     visible:            statsHeader.checked
                 }
-            } // Grid Column
+            } // Grid Tab
 
-            // Camera Tab
-            CameraCalcCamera {
-                Layout.fillWidth:   true
-                visible:            tabBar.currentIndex === 1
-                cameraCalc:         _missionItem.cameraCalc
+            QGCGroupBoxTab {
+                iconSource: "/qmlimages/PatternCamera.png"
+
+                CameraCalcCamera {
+                    Layout.fillWidth:   true
+                    cameraCalc:         _missionItem.cameraCalc
+                }
             }
 
-            // Terrain Tab
-            TransectStyleComplexItemTerrainFollow {
-                Layout.fillWidth:   true
-                spacing:            _margin
-                visible:            tabBar.currentIndex === 2
-                missionItem:        _missionItem
+            QGCGroupBoxTab {
+                iconSource: "/qmlimages/PatternTerrain.png"
+
+                TransectStyleComplexItemTerrainFollow {
+                    Layout.fillWidth:   true
+                    spacing:            _margin
+                    missionItem:        _missionItem
+                }
             }
 
-            // Presets Tab
-            ColumnLayout {
-                Layout.fillWidth:   true
-                spacing:            _margin
-                visible:            tabBar.currentIndex === 3
+            QGCGroupBoxTab {
+                iconSource: "/qmlimages/PatternPresets.png"
 
                 QGCLabel {
                     Layout.fillWidth:   true
@@ -184,7 +178,13 @@ Rectangle {
                         Layout.fillWidth:   true
                         text:               qsTr("Delete Preset")
                         enabled:            _missionItem.presetNames.length != 0
-                        onClicked:          deletePresetDialog.createObject(mainWindow, { presetName: presetCombo.textAt(presetCombo.currentIndex) }).open()
+                        onClicked:          deletePresetDialogFactory.open({ presetName: presetCombo.textAt(presetCombo.currentIndex) })
+
+                        QGCPopupDialogFactory {
+                            id: deletePresetDialogFactory
+
+                            dialogComponent: deletePresetDialog
+                        }
 
                         Component {
                             id: deletePresetDialog
@@ -192,7 +192,7 @@ Rectangle {
                             QGCSimpleMessageDialog {
                                 title:      qsTr("Delete Preset")
                                 text:       qsTr("Are you sure you want to delete '%1' preset?").arg(presetName)
-                                buttons:    StandardButton.Yes | StandardButton.No
+                                buttons:    Dialog.Yes | Dialog.No
 
                                 property string presetName
 
@@ -208,7 +208,7 @@ Rectangle {
                     Layout.alignment:   Qt.AlignCenter
                     Layout.fillWidth:   true
                     text:               qsTr("Save Settings As New Preset")
-                    onClicked:          savePresetDialog.createObject(mainWindow).open()
+                    onClicked:          savePresetDialogFactory.open()
                 }
 
                 SectionHeader {
@@ -239,13 +239,19 @@ Rectangle {
             } // Main editing column
         } // Top level  Column
 
+        QGCPopupDialogFactory {
+            id: savePresetDialogFactory
+
+            dialogComponent: savePresetDialog
+        }
+
         Component {
             id: savePresetDialog
 
             QGCPopupDialog {
                 id:         popupDialog
                 title:      qsTr("Save Preset")
-                buttons:    StandardButton.Save | StandardButton.Cancel
+                buttons:    Dialog.Save | Dialog.Cancel
 
                 onAccepted: {
                     if (presetNameField.text != "") {
@@ -295,7 +301,7 @@ Rectangle {
                         id:                 nameError
                         Layout.fillWidth:   true
                         wrapMode:           Text.WordWrap
-                        color:              QGroundControl.globalPalette.warningText
+                        color:              QGroundControl.globalPalette.errorText
                         visible:            text !== ""
                     }
                 }

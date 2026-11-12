@@ -1,17 +1,8 @@
-/****************************************************************************
- *
- * (c) 2021 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #include "Mixer.h"
+#include "ParameterManager.h"
+#include "QGCLoggingCategory.h"
 
-#include <QDebug>
-
-#include <cmath>
+QGC_LOGGING_CATEGORY(MixerLog, "Vehicle.Actuators.Mixer")
 
 using namespace Mixer;
 
@@ -42,8 +33,8 @@ ChannelConfigInstance* ChannelConfig::instantiate(int paramIndex, int actuatorTy
         fact = new Fact("", metaData, this);
         fact->setRawValue(value);
 
-    } else if (parameterManager->parameterExists(FactSystem::defaultComponentId, param)) {
-        fact = parameterManager->getParameter(FactSystem::defaultComponentId, param);
+    } else if (parameterManager->parameterExists(ParameterManager::defaultComponentId, param)) {
+        fact = parameterManager->getParameter(ParameterManager::defaultComponentId, param);
         if (displayOption() == Parameter::DisplayOption::Bitset) {
             fact = new FactBitset(this, fact, usedParamIndex);
         } else if (displayOption() == Parameter::DisplayOption::BoolTrueIfPositive) {
@@ -51,7 +42,7 @@ ChannelConfigInstance* ChannelConfig::instantiate(int paramIndex, int actuatorTy
         }
         factAddedCb(function(), fact);
     } else {
-        qCDebug(ActuatorsConfigLog) << "ActuatorOutputChannel: Param does not exist:" << param;
+        qCDebug(MixerLog) << "ActuatorOutputChannel: Param does not exist:" << param;
     }
 
     ChannelConfigInstance* instance = new ChannelConfigInstance(this, fact, *this);
@@ -81,8 +72,10 @@ void ChannelConfig::instanceVisibleChanged()
     }
 }
 
-ChannelConfigInstance* ChannelConfigVirtualAxis::instantiate(int paramIndex, int actuatorTypeIndex,
-        ParameterManager* parameterManager, std::function<void(Function, Fact*)> factAddedCb)
+ChannelConfigInstance *ChannelConfigVirtualAxis::instantiate(
+    [[maybe_unused]] int paramIndex, [[maybe_unused]] int actuatorTypeIndex,
+    [[maybe_unused]] ParameterManager *parameterManager,
+    [[maybe_unused]] std::function<void(Function, Fact *)> factAddedCb)
 {
     ChannelConfigInstance* instance = new ChannelConfigInstanceVirtualAxis(this, *this);
     channelInstanceCreated(instance);
@@ -101,7 +94,10 @@ void ChannelConfigInstanceVirtualAxis::allInstancesInitialized(QmlObjectListMode
             _axes[2] = channelConfigInstance;
         }
     }
-    Q_ASSERT(_axes[0] && _axes[1] && _axes[2]);
+    if (!_axes[0] || !_axes[1] || !_axes[2]) {
+        qCCritical(MixerLog) << "Internal Error: virtual axis created without all three axis instances";
+        return;
+    }
 
     for (int i = 0; i < 3; ++i) {
         if (!_axes[i]->fact())
@@ -244,9 +240,9 @@ MixerChannel::MixerChannel(QObject *parent, const QString &label, int actuatorFu
                     _currentSelectIdentifierValue = fact->rawValue().toInt();
                 }
             } else {
-                for (int i = 0; i < rule->applyIdentifiers.size(); ++i) {
-                    if (channelConfig->identifier() == rule->applyIdentifiers[i]) {
-                        instance->setRuleApplyIdentifierIdx(i);
+                for (int applyIndex = 0; applyIndex < rule->applyIdentifiers.size(); ++applyIndex) {
+                    if (channelConfig->identifier() == rule->applyIdentifiers[applyIndex]) {
+                        instance->setRuleApplyIdentifierIdx(applyIndex);
                     }
                 }
             }
@@ -366,7 +362,7 @@ bool MixerChannel::getGeometry(const ActuatorTypes& actuatorTypes, const MixerOp
     return numPositionAxis == 3;
 }
 
-Fact* MixerChannel::getFact(Function function) const
+Fact* MixerChannel::getFact([[maybe_unused]] Function function) const
 {
     for (int i = 0; i < _configInstances->count(); ++i) {
         ChannelConfigInstance* configInstance = _configInstances->value<ChannelConfigInstance*>(i);
@@ -405,7 +401,7 @@ void Mixers::reset(const ActuatorTypes& actuatorTypes, const MixerOptions& mixer
     _rules = rules;
     _mixerConditions.clear();
     for (const auto& mixerOption : _mixerOptions) {
-        _mixerConditions.append(Condition(mixerOption.option, _parameterManager));
+        _mixerConditions.append(Condition(mixerOption.option, _parameterManager, "mixer-option"));
     }
     update();
 }
@@ -432,7 +428,7 @@ void Mixers::update()
 
         subscribeFact(_mixerConditions[_selectedMixer].fact());
 
-        qCDebug(ActuatorsConfigLog) << "selected mixer index:" << _selectedMixer;
+        qCDebug(MixerLog) << "selected mixer index:" << _selectedMixer;
 
         const auto& actuatorGroups = _mixerOptions[_selectedMixer].actuators;
         QMap<QString, int> actuatorTypeCount;
@@ -506,7 +502,7 @@ void Mixers::update()
                     actuatorFunction = actuatorType->functionMin + actuatorTypeIndex;
                     label = _functions.value(actuatorFunction).label;
                     if (label == "") {
-                        qCWarning(ActuatorsConfigLog) << "No label for output function" << actuatorFunction;
+                        qCWarning(MixerLog) << "No label for output function" << actuatorFunction;
                     }
                     QString itemLabelPrefix{};
                     if (actuatorGroup.itemLabelPrefix.size() == 1) {
@@ -632,11 +628,11 @@ QString Mixers::helpUrl() const
 
 Fact* Mixers::getFact(const QString& paramName)
 {
-    if (!_parameterManager->parameterExists(FactSystem::defaultComponentId, paramName)) {
-        qCDebug(ActuatorsConfigLog) << "Mixers: Param does not exist:" << paramName;
+    if (!_parameterManager->parameterExists(ParameterManager::defaultComponentId, paramName)) {
+        qCDebug(MixerLog) << "Mixers: Param does not exist:" << paramName;
         return nullptr;
     }
-    Fact* fact = _parameterManager->getParameter(FactSystem::defaultComponentId, paramName);
+    Fact* fact = _parameterManager->getParameter(ParameterManager::defaultComponentId, paramName);
 	subscribeFact(fact);
 	return fact;
 }

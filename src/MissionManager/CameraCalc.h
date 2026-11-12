@@ -1,13 +1,6 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #pragma once
+
+#include <QtQmlIntegration/QtQmlIntegration>
 
 #include "CameraSpec.h"
 #include "SettingsFact.h"
@@ -18,7 +11,8 @@ class PlanMasterController;
 class CameraCalc : public CameraSpec
 {
     Q_OBJECT
-
+    QML_ELEMENT
+    QML_UNCREATABLE("")
 public:
     CameraCalc(PlanMasterController* masterController, const QString& settingsGroup, QObject* parent = nullptr);
 
@@ -44,7 +38,7 @@ public:
     //  grid altitude mode -    distanceMode
     //  trigger distance -      adjustedFootprintFrontal
     //  transect spacing -      adjustedFootprintSide
-    Q_PROPERTY(QGroundControlQmlGlobal::AltMode distanceMode READ distanceMode WRITE setDistanceMode NOTIFY distanceModeChanged)
+    Q_PROPERTY(QGroundControlQmlGlobal::AltitudeFrame distanceMode READ distanceMode WRITE setDistanceMode NOTIFY distanceModeChanged)
 
     // The following values are calculated from the camera properties
     Q_PROPERTY(double imageFootprintSide    READ imageFootprintSide     NOTIFY imageFootprintSideChanged)       ///< Size of image size side in meters
@@ -75,9 +69,9 @@ public:
     bool    isCustomCamera              (void) const { return _cameraNameFact.rawValue().toString() == canonicalCustomCameraName(); }
     double  imageFootprintSide          (void) const { return _imageFootprintSide; }
     double  imageFootprintFrontal       (void) const { return _imageFootprintFrontal; }
-    QGroundControlQmlGlobal::AltMode distanceMode(void) const { return _distanceMode; }
+    QGroundControlQmlGlobal::AltitudeFrame distanceMode(void) const { return _distanceMode; }
 
-    void setDistanceMode                (QGroundControlQmlGlobal::AltMode altMode);
+    void setDistanceMode                (QGroundControlQmlGlobal::AltitudeFrame altFrame);
     void setCameraBrand                 (const QString& cameraBrand);
     void setCameraModel                 (const QString& cameraModel);
 
@@ -86,20 +80,20 @@ public:
 
     void _setCameraNameFromV3TransectLoad   (const QString& cameraName);
 
-    static const char* cameraNameName;
-    static const char* valueSetIsDistanceName;
-    static const char* distanceToSurfaceName;
-    static const char* distanceModeName;
-    static const char* imageDensityName;
-    static const char* frontalOverlapName;
-    static const char* sideOverlapName;
-    static const char* adjustedFootprintSideName;
-    static const char* adjustedFootprintFrontalName;
+    static constexpr const char* cameraNameName                  = "CameraName";
+    static constexpr const char* valueSetIsDistanceName          = "ValueSetIsDistance";
+    static constexpr const char* distanceToSurfaceName           = "DistanceToSurface";
+    static constexpr const char* distanceModeName                = "DistanceMode";
+    static constexpr const char* imageDensityName                = "ImageDensity";
+    static constexpr const char* frontalOverlapName              = "FrontalOverlap";
+    static constexpr const char* sideOverlapName                 = "SideOverlap";
+    static constexpr const char* adjustedFootprintFrontalName    = "AdjustedFootprintFrontal";
+    static constexpr const char* adjustedFootprintSideName       = "AdjustedFootprintSide";
 
 signals:
     void imageFootprintSideChanged          (double imageFootprintSide);
     void imageFootprintFrontalChanged       (double imageFootprintFrontal);
-    void distanceModeChanged                (int altMode);
+    void distanceModeChanged                (int altFrame);
     void isManualCameraChanged              (void);
     void isCustomCameraChanged              (void);
     void cameraBrandChanged                 (void);
@@ -122,7 +116,7 @@ private:
     QString                             _cameraModel;
     QStringList                         _cameraBrandList;
     QStringList                         _cameraModelList;
-    QGroundControlQmlGlobal::AltMode    _distanceMode               = QGroundControlQmlGlobal::AltitudeModeRelative;
+    QGroundControlQmlGlobal::AltitudeFrame    _distanceMode               = QGroundControlQmlGlobal::AltitudeFrameRelative;
     double                              _imageFootprintSide         = 0;
     double                              _imageFootprintFrontal      = 0;
     QVariantList                        _knownCameraList;
@@ -144,8 +138,8 @@ private:
         CameraSpecCustom,
         CameraSpecKnown
     };
-    static const char* _jsonCameraSpecTypeKeyDeprecated;
 
+    static constexpr const char* _jsonCameraSpecTypeKeyDeprecated            = "CameraSpecType";
     // The following are deprecated and only included in order to convert V1 formats
-    static const char* _jsonDistanceToSurfaceRelativeKeyDeprecated;
+    static constexpr const char* _jsonDistanceToSurfaceRelativeKeyDeprecated = "DistanceToSurfaceRelative";
 };

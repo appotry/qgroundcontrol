@@ -1,50 +1,19 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Layouts  1.2
+import QGroundControl
+import QGroundControl.Controls
 
-import QGroundControl               1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.FactSystem    1.0
-import QGroundControl.ScreenTools   1.0
-
-Item {
-    width: availableWidth
-
-    FactPanelController {
-        id:         controller
-    }
-
-    QGCTabBar {
-        id:             bar
-        width:          parent.width
-        anchors.top:    parent.top
-        QGCTabButton {
-            text:       qsTr("Rate Controller")
+PX4TuningComponent {
+    model: ListModel {
+        ListElement {
+            buttonText: qsTr("Rate Controller")
+            tuningPage: "PX4TuningComponentPlaneRate.qml"
         }
-        QGCTabButton {
-            text:       qsTr("Attitude Controller")
+        ListElement {
+            buttonText: qsTr("Attitude Controller")
+            tuningPage: "PX4TuningComponentPlaneAttitude.qml"
         }
-    }
-
-    property var pages:  [
-        "PX4TuningComponentPlaneRate.qml",
-        "PX4TuningComponentPlaneAttitude.qml",
-    ]
-
-    Loader {
-        source:            pages[bar.currentIndex]
-        width:             parent.width
-        anchors.top:       bar.bottom
-        anchors.topMargin: ScreenTools.defaultFontPixelWidth
-        anchors.bottom:    parent.bottom
     }
 }

@@ -1,34 +1,19 @@
-/****************************************************************************
- *
- * (c) 2021 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Layouts  1.2
-
-import QGroundControl               1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.FactSystem    1.0
-import QGroundControl.FactControls  1.0
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Vehicle       1.0
+import QGroundControl
+import QGroundControl.Controls
+import QGroundControl.FactControls
 
 ColumnLayout {
-    width: availableWidth
-    anchors.fill: parent
-    property alias autotuningEnabled: pidTuning.autotuningEnabled
+    property real _availableHeight: availableHeight
+    property real _availableWidth:  availableWidth
 
-    GridLayout {
-        columns: 2
-    }
     PIDTuning {
-        width: availableWidth
-        id:    pidTuning
+        id:                 pidTuning
+        availableWidth:     _availableWidth
+        availableHeight:    _availableHeight - pidTuning.y
 
         property var roll: QtObject {
             property string name: qsTr("Roll")
@@ -38,8 +23,8 @@ ColumnLayout {
             ]
             property var params: ListModel {
                 ListElement {
-                    title:          qsTr("Porportional gain (FW_RR_P)")
-                    description:    qsTr("Porportional gain.")
+                    title:          qsTr("Proportional gain (FW_RR_P)")
+                    description:    qsTr("Proportional gain.")
                     param:          "FW_RR_P"
                     min:            0.0
                     max:            1
@@ -63,7 +48,7 @@ ColumnLayout {
                 }
                 ListElement {
                     title:          qsTr("Feedforward Gain (FW_RR_FF)")
-                    description:    qsTr("Feedforward gused to compensate for aerodynamic damping.")
+                    description:    qsTr("Feedforward used to compensate for aerodynamic damping.")
                     param:          "FW_RR_FF"
                     min:            0.0
                     max:            10.0
@@ -79,8 +64,8 @@ ColumnLayout {
             ]
             property var params: ListModel {
                 ListElement {
-                    title:          qsTr("Porportional Gain (FW_PR_P)")
-                    description:    qsTr("Porportional Gain.")
+                    title:          qsTr("Proportional Gain (FW_PR_P)")
+                    description:    qsTr("Proportional Gain.")
                     param:          "FW_PR_P"
                     min:            0.0
                     max:            1
@@ -104,7 +89,7 @@ ColumnLayout {
                 }
                 ListElement {
                     title:          qsTr("Feedforward Gain (FW_PR_FF)")
-                    description:    qsTr("Feedforward gused to compensate for aerodynamic damping.")
+                    description:    qsTr("Feedforward used to compensate for aerodynamic damping.")
                     param:          "FW_PR_FF"
                     min:            0.0
                     max:            10.0
@@ -120,16 +105,16 @@ ColumnLayout {
             ]
             property var params: ListModel {
                 ListElement {
-                    title:          qsTr("Porportional Gain (FW_YR_P)")
-                    description:    qsTr("Porportional Gain.")
+                    title:          qsTr("Proportional Gain (FW_YR_P)")
+                    description:    qsTr("Proportional Gain.")
                     param:          "FW_YR_P"
                     min:            0.0
                     max:            1
                     step:           0.005
                 }
                 ListElement {
-                    title:          qsTr("Integral Gain (FW_YR_D)")
-                    description:    qsTr("Generally does not need much adjustment, reduce this when seeing slow oscillations.")
+                    title:          qsTr("Differential Gain (FW_YR_D)")
+                    description:    qsTr("Damping: increase to reduce overshoots and oscillations, but not higher than really needed.")
                     param:          "FW_YR_D"
                     min:            0.0
                     max:            1.0
@@ -145,7 +130,7 @@ ColumnLayout {
                 }
                 ListElement {
                     title:          qsTr("Feedforward Gain (FW_YR_FF)")
-                    description:    qsTr("Feedforward gused to compensate for aerodynamic damping.")
+                    description:    qsTr("Feedforward used to compensate for aerodynamic damping.")
                     param:          "FW_YR_FF"
                     min:            0.0
                     max:            10.0
@@ -161,7 +146,7 @@ ColumnLayout {
                 }
             }
         }
-        title: "Rate"
+        title: qsTr("Rate")
         tuningMode: Vehicle.ModeRateAndAttitude
         unit: "deg/s"
         axis: [ roll, pitch, yaw ]
@@ -170,4 +155,3 @@ ColumnLayout {
         showAutoTuning:     true
     }
 }
-

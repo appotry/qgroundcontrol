@@ -1,23 +1,13 @@
-/****************************************************************************
- *
- * (c) 2021 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
-
 #pragma once
-
-#include <QObject>
-#include <QString>
-
-#include <functional>
 
 #include "Common.h"
 #include "ActuatorActions.h"
+#include "QmlObjectListModel.h"
 
-#include <QmlObjectListModel.h>
+#include <QtCore/QObject>
+#include <QtCore/QString>
+
+#include <functional>
 
 namespace ActuatorOutputs {
 
@@ -221,6 +211,8 @@ public:
     const QStringList& notes() const { return _notes; }
 
     void forEachOutputFunction(std::function<void(ActuatorOutputSubgroup*, ChannelConfigInstance*, Fact*)> callback) const;
+
+    void forEachChannelFunction(std::function<void(ActuatorOutputChannel*, Fact*)> callback) const;
 
 signals:
     void subgroupsChanged();

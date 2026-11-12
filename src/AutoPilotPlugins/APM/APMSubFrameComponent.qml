@@ -1,25 +1,11 @@
-/****************************************************************************
- *
- * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
- *
- * QGroundControl is licensed according to the terms in the file
- * COPYING.md in the root of the source code directory.
- *
- ****************************************************************************/
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Dialogs
+import QtQuick.Layouts
 
-
-import QtQuick          2.3
-import QtQuick.Controls 1.2
-import QtQuick.Dialogs  1.2
-import QtQuick.Layouts  1.2
-
-import QGroundControl               1.0
-import QGroundControl.FactSystem    1.0
-import QGroundControl.FactControls  1.0
-import QGroundControl.Palette       1.0
-import QGroundControl.Controls      1.0
-import QGroundControl.ScreenTools   1.0
-import QGroundControl.Controllers   1.0
+import QGroundControl
+import QGroundControl.FactControls
+import QGroundControl.Controls
 
 SetupPage {
     id:                 subFramePage
@@ -63,7 +49,7 @@ SetupPage {
             id:     mainColumn
             width:  availableWidth
 
-            QGCPalette { id: palette; colorGroupEnabled: true }
+            QGCPalette { id: qgcPal; colorGroupEnabled: true }
 
             property real _minW:        ScreenTools.defaultFontPixelWidth * 30
             property real _boxWidth:    _minW
@@ -159,7 +145,7 @@ SetupPage {
                             anchors.bottom:     parent.bottom
                             anchors.left:       parent.left
                             anchors.right:      parent.right
-                            color:              subFrameModel.get(index).paramValue == _frameConfig.value ? qgcPal.buttonHighlight: qgcPal.windowShade
+                            color:              subFrameModel.get(index).paramValue == _frameConfig.value ? qgcPal.accent: qgcPal.windowCard
 
                             Image {
                                 anchors.margins:    ScreenTools.defaultFontPixelWidth
@@ -184,7 +170,7 @@ SetupPage {
                                         setFrameConfig(frameModelSelected.paramValue)
                                         return
                                     }
-                                    confirmFrameComponent.createObject(mainWindow).open()
+                                    confirmFrameDialogFactory.open()
                                 }
                             }
                         }
@@ -194,13 +180,19 @@ SetupPage {
         } // Column
     } // Component
 
+    QGCPopupDialogFactory {
+        id: confirmFrameDialogFactory
+
+        dialogComponent: confirmFrameComponent
+    }
+
     Component {
         id: confirmFrameComponent
 
         QGCPopupDialog {
             id:         confirmFrameDialog
             title:      qsTr("Frame selection")
-            buttons:    StandardButton.Close
+            buttons:    Dialog.Close
 
             ColumnLayout {
                 QGCLabel {
